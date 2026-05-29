@@ -52,3 +52,24 @@ def add_seen_task_ids(ids: list[str]) -> None:
     seen.update(ids)
     data["seen_task_ids"] = sorted(seen)[-2000:]
     _write(data)
+
+
+# ─── per-phone preferences ────────────────────────────────────────────
+
+def get_language(phone: str) -> Optional[str]:
+    """Return saved language for phone (no '+'), or None if not set."""
+    prefs = _read().get("preferences", {})
+    return (prefs.get(phone.lstrip("+")) or {}).get("language")
+
+
+def set_language(phone: str, lang: str) -> None:
+    data = _read()
+    prefs = data.setdefault("preferences", {})
+    user = prefs.setdefault(phone.lstrip("+"), {})
+    user["language"] = lang
+    _write(data)
+
+
+def is_first_contact(phone: str) -> bool:
+    """True if this phone has never set a preference."""
+    return get_language(phone) is None

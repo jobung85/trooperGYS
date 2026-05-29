@@ -58,7 +58,11 @@ def webhook_receive():
         reply = command_handler.handle(from_phone, text)
     except Exception:
         log.exception("Handler crashed")
-        reply = "⚠️ Sorry, something went wrong. Jonathan has been notified."
+        reply = "Sorry, something went wrong. Jonathan has been notified."
+
+    if reply is None:
+        # Not a slash-command (or empty) - stay silent. Critical for groups.
+        return jsonify(status="ignored"), 200
 
     try:
         whatsapp_client.send_text(from_phone, reply)

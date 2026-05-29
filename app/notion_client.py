@@ -112,6 +112,57 @@ def _extract_main_task(page: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def find_main_task_by_id(task_id: str) -> Optional[Dict[str, Any]]:
+    """Look up one Main Task by its title (Task ID). None if not found."""
+    body: Dict[str, Any] = {
+        "filter": {"property": "Name", "title": {"equals": task_id}},
+        "page_size": 5,
+    }
+    for page in _query_all(config.NOTION_MAIN_TASK_DB, body):
+        return _extract_main_task(page)
+    return None
+
+
+def get_main_tasks_by_ids(task_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Bulk lookup. Returns {task_id: main_task_dict} for ids that exist."""
+    if not task_ids:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    or_clauses = [{"property": "Name", "title": {"equals": tid}} for tid in task_ids]
+    body: Dict[str, Any] = {"filter": {"or": or_clauses}, "page_size": 100}
+    for page in _query_all(config.NOTION_MAIN_TASK_DB, body):
+        rec = _extract_main_task(page)
+        out[rec["task_id"]] = rec
+    return out
+
+
+def create_main_task(
+    task_id: str,
+    content_name: str,
+    link: Optional[str] = None,
+    create_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a Main Task page. Returns the parsed dict.
+    `create_date` should be ISO-8601 (date or datetime); if None, today (UTC)."""
+    from datetime import datetime, timezone
+
+    if create_date is None:
+        create_date = datetime.now(timezone.utc).date().isoformat()
+
+    props: Dict[str, Any] = {
+        "Name": {"title": [{"text": {"content": task_id}}]},
+        "Content Name": {"rich_text": [{"text": {"content": content_name}}]},
+        "Create Date": {"date": {"start": create_date}},
+        "Complete": {"select": {"name": "No"}},
+    }
+    if link:
+        props["Link"] = {"url": link}
+
+    body = {"parent": {"database_id": config.NOTION_MAIN_TASK_DB}, "properties": props}
+    page = _post("/pages", body)
+    return _extract_main_task(page)
+
+
 # ───────────────────────────  Task Tracker  ────────────────────────────
 
 def find_tracker_rows(task_id: str, trooper_name: Optional[str] = None) -> List[Dict[str, Any]]:
