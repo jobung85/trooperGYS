@@ -1,0 +1,37 @@
+# Render Blueprint - deploys ONLY the Flask webhook service.
+# The 6-hourly poller lives in .github/workflows/trooper-poll.yml (GitHub Actions, free).
+#
+# Render free tier: 750 hours/month for one Web Service.
+# Service sleeps after 15 min idle; Meta retries webhook 3x over 5 min so this is OK.
+#
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: trooper-bot
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT app.main:app
+    healthCheckPath: /health
+    envVars:
+      - key: NOTION_TOKEN
+        sync: false
+      - key: NOTION_MAIN_TASK_DB
+        value: 36fe9c57-814d-80c8-8ea0-cb45f5ee2eb2
+      - key: NOTION_TASK_TRACKER_DB
+        value: 36fe9c57-814d-80d9-8704-f26fec4bf51d
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        value: "1059304737269663"
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: TIMEZONE
+        value: Asia/Jakarta
+      - key: TROOPERS_CONFIG
+        value: config/troopers.json
+      - key: STATE_FILE
+        value: /tmp/trooper-last-poll.json

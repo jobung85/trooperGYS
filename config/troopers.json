@@ -1,0 +1,30 @@
+{
+  "_comment": "Map each Notion 'Trooper' select option to their WhatsApp number (E.164, no '+' or spaces, e.g. 6281234567890). The 'aliases' list lets the bot recognise people when the inbound msg comes from a number not in 'phone' (rare).",
+
+  "troopers": [
+    {
+      "notion_name": "Sdri Cien-Cien",
+      "display_name": "Cien-Cien",
+      "phone": "628112233585",
+      "aliases": ["Natalia", "Cien", "Cien-Cien"]
+    },
+    {
+      "notion_name": "Sdri Lisa",
+      "display_name": "Lisa",
+      "phone": "628998417654",
+      "aliases": ["Lisa", "Lisa Susanto"]
+    },
+    {
+      "notion_name": "Sdri Nove",
+      "display_name": "Nove",
+      "phone": "6281287708753",
+      "aliases": ["Nove"]
+    },
+    {
+      "notion_name": "Sdr Jonathan",
+      "display_name": "Jonathan",
+      "phone": "6281216977718",
+      "aliases": ["Jonathan", "Jo"]
+    }
+  ]
+}
