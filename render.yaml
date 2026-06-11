@@ -23,6 +23,8 @@ services:
         value: 36fe9c57-814d-80c8-8ea0-cb45f5ee2eb2
       - key: NOTION_TASK_TRACKER_DB
         value: 36fe9c57-814d-80d9-8704-f26fec4bf51d
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        value: "1379492034025973"
       - key: WHATSAPP_PHONE_NUMBER_ID
         value: "1182700204923692"
       - key: WHATSAPP_ACCESS_TOKEN
