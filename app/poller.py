@@ -52,8 +52,7 @@ def _ensure_tracker_rows(task_id: str) -> List[str]:
 
 
 def _notify_troopers(task: dict, trooper_names: Iterable[str]) -> int:
-    """Send the WA notification. Returns count of successful sends."""
-    body = _format_new_task(task)
+    """Send the WA notification via template (works without 24h window)."""
     sent = 0
     for name in trooper_names:
         t = config.trooper_by_notion_name(name)
@@ -63,7 +62,12 @@ def _notify_troopers(task: dict, trooper_names: Iterable[str]) -> int:
             log.warning("Skipping notify: trooper %s has no phone yet", name)
             continue
         try:
-            whatsapp_client.send_text(t.phone, body)
+            whatsapp_client.send_new_task_notification(
+                t.phone,
+                t.display_name,
+                task["task_id"],
+                task.get("content_name", ""),
+            )
             sent += 1
             log.info("Notified %s (%s) about %s", t.display_name, t.phone, task["task_id"])
         except Exception:

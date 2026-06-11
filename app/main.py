@@ -44,7 +44,19 @@ def webhook_verify() -> Tuple[str, int]:
 @app.post("/webhook")
 def webhook_receive():
     payload = request.get_json(silent=True) or {}
-    log.debug("Inbound webhook: %s", payload)
+
+    # Log delivery statuses so we can debug failed sends
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            for st in value.get("statuses", []):
+                status = st.get("status")
+                recipient = st.get("recipient_id")
+                errors = st.get("errors", [])
+                if errors:
+                    log.warning("DELIVERY %s to %s — errors: %s", status, recipient, errors)
+                else:
+                    log.info("DELIVERY %s to %s", status, recipient)
 
     msg = whatsapp_client.parse_inbound(payload)
     if not msg or msg.get("type") != "text":
@@ -64,8 +76,10 @@ def webhook_receive():
         # Not a slash-command (or empty) - stay silent. Critical for groups.
         return jsonify(status="ignored"), 200
 
+    trooper = config.trooper_by_phone(from_phone)
+    trooper_name = trooper.display_name if trooper else from_phone
     try:
-        whatsapp_client.send_text(from_phone, reply)
+        whatsapp_client.send_text(from_phone, reply, trooper_name=trooper_name)
     except Exception:
         log.exception("Failed to send WA reply")
 
