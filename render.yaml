@@ -24,7 +24,7 @@ services:
       - key: NOTION_TASK_TRACKER_DB
         value: 36fe9c57-814d-80d9-8704-f26fec4bf51d
       - key: WHATSAPP_PHONE_NUMBER_ID
-        value: "1059304737269663"
+        value: "1182700204923692"
       - key: WHATSAPP_ACCESS_TOKEN
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN
