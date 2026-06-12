@@ -27,6 +27,8 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "- `/tasks all` - pending + last 5 done\n"
             "- `/info <Task ID>` - full task details + link\n"
             "- `/done <Task ID>` - mark task as Done\n"
+            "  (bot will ask for a screenshot proof)\n"
+            "- `/skip` - mark Done without proof\n"
             "- `/redo <Task ID>` - reopen a task\n"
             "- `/create <Task ID> | <Content> | <Link>` - create a new Main Task\n"
             "  (creates trackers for everyone automatically)\n"
@@ -61,6 +63,15 @@ STRINGS: Dict[str, Dict[str, str]] = {
         ),
         "marked_done": "Got it. *{task_id}* set to *Done*.",
         "marked_redo": "Reopened. *{task_id}* set to *Not started*.",
+        "send_proof": (
+            "Please send a *screenshot* as proof for task *{task_id}*.\n\n"
+            "Or send `/skip` to mark Done without proof."
+        ),
+        "proof_accepted": "Screenshot received. *{task_id}* marked as *Done* with proof attached.",
+        "proof_download_failed": "Could not download your image. Please try again for task *{task_id}*.",
+        "proof_upload_failed": "Failed to upload proof to Notion for *{task_id}*. Please try again.",
+        "done_skipped": "*{task_id}* marked as *Done* (without proof).",
+        "nothing_to_skip": "No pending task to skip. Use `/done <Task ID>` first.",
         "create_usage": (
             "Usage: `/create <Task ID> | <Content Name> | <Link>`\n"
             "Example: `/create 0042 | Why is faith important? | https://...`\n"
@@ -89,6 +100,8 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "- `/tasks all` - belum selesai + 5 terakhir yang selesai\n"
             "- `/info <Task ID>` - detail lengkap tugas + link\n"
             "- `/done <Task ID>` - tandai tugas sebagai Selesai\n"
+            "  (bot akan minta screenshot sebagai bukti)\n"
+            "- `/skip` - tandai Selesai tanpa bukti\n"
             "- `/redo <Task ID>` - buka kembali tugas\n"
             "- `/create <Task ID> | <Konten> | <Link>` - buat Main Task baru\n"
             "  (otomatis bikin tracker untuk semua orang)\n"
@@ -123,6 +136,15 @@ STRINGS: Dict[str, Dict[str, str]] = {
         ),
         "marked_done": "Tercatat. *{task_id}* diatur sebagai *Selesai*.",
         "marked_redo": "Dibuka kembali. *{task_id}* diatur sebagai *Belum mulai*.",
+        "send_proof": (
+            "Kirim *screenshot* sebagai bukti untuk task *{task_id}*.\n\n"
+            "Atau kirim `/skip` untuk tandai Selesai tanpa bukti."
+        ),
+        "proof_accepted": "Screenshot diterima. *{task_id}* ditandai *Selesai* dengan bukti terlampir.",
+        "proof_download_failed": "Tidak bisa mengunduh gambar. Coba lagi untuk task *{task_id}*.",
+        "proof_upload_failed": "Gagal mengunggah bukti ke Notion untuk *{task_id}*. Coba lagi.",
+        "done_skipped": "*{task_id}* ditandai *Selesai* (tanpa bukti).",
+        "nothing_to_skip": "Tidak ada task yang menunggu. Gunakan `/done <Task ID>` dulu.",
         "create_usage": (
             "Cara pakai: `/create <Task ID> | <Nama Konten> | <Link>`\n"
             "Contoh: `/create 0042 | Kenapa iman penting? | https://...`\n"

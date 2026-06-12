@@ -73,3 +73,29 @@ def set_language(phone: str, lang: str) -> None:
 def is_first_contact(phone: str) -> bool:
     """True if this phone has never set a preference."""
     return get_language(phone) is None
+
+
+# ─── pending proof (screenshot for /done) ─────────────────────────────
+
+def set_pending_proof(phone: str, task_id: str, page_id: str, trooper_name: str) -> None:
+    """Store that we're waiting for a screenshot from this phone."""
+    data = _read()
+    pending = data.setdefault("pending_proof", {})
+    pending[phone.lstrip("+")] = {
+        "task_id": task_id,
+        "page_id": page_id,
+        "trooper_name": trooper_name,
+    }
+    _write(data)
+
+
+def get_pending_proof(phone: str) -> dict | None:
+    """Return pending proof dict or None."""
+    return _read().get("pending_proof", {}).get(phone.lstrip("+"))
+
+
+def clear_pending_proof(phone: str) -> None:
+    data = _read()
+    pending = data.get("pending_proof", {})
+    pending.pop(phone.lstrip("+"), None)
+    _write(data)

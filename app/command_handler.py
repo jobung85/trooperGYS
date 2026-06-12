@@ -46,9 +46,16 @@ def handle(from_phone: str, text: str) -> Optional[str]:
         return t(None, "not_registered")
 
     locale = state.get_language(from_phone) or "en"
-    cmd_lc = body.lower()
     first_word = body.split(None, 1)[0].lower()
     args = body.split(None, 1)[1].strip() if len(body.split(None, 1)) > 1 else ""
+
+    # ── /skip — cancel pending proof ─────────────────────────────────
+    if first_word in {"skip", "lewat", "cancel", "batal"}:
+        pending = state.get_pending_proof(from_phone)
+        if pending:
+            _finish_done_without_proof(locale, from_phone, pending)
+            return t(locale, "done_skipped", task_id=pending["task_id"])
+        return t(locale, "nothing_to_skip")
 
     # ── /lang en | /lang id ──────────────────────────────────────────
     if first_word in {"lang", "language", "bahasa"}:
@@ -74,7 +81,7 @@ def handle(from_phone: str, text: str) -> Optional[str]:
 
     # ── /done <id> ───────────────────────────────────────────────────
     if first_word in {"done", "finish", "finished", "selesai", "sudah"}:
-        return _mark(locale, trooper.notion_name, args, "Done")
+        return _start_done(locale, trooper.notion_name, from_phone, args)
 
     # ── /redo <id> ───────────────────────────────────────────────────
     if first_word in {"redo", "undo", "reopen", "belum", "buka"}:
@@ -82,6 +89,37 @@ def handle(from_phone: str, text: str) -> Optional[str]:
 
     # ── unknown ──────────────────────────────────────────────────────
     return t(locale, "unknown", name=trooper.display_name)
+
+
+def handle_image(from_phone: str, media_id: str, mime_type: str) -> Optional[str]:
+    """Handle an inbound image — used to fulfil a pending /done proof."""
+    pending = state.get_pending_proof(from_phone)
+    if not pending:
+        return None
+
+    locale = state.get_language(from_phone) or "en"
+    task_id = pending["task_id"]
+    page_id = pending["page_id"]
+
+    from . import whatsapp_client
+    image_bytes = whatsapp_client.download_media(media_id)
+    if not image_bytes:
+        return t(locale, "proof_download_failed", task_id=task_id)
+
+    ext = "jpg" if "jpeg" in mime_type or "jpg" in mime_type else mime_type.split("/")[-1]
+    file_name = f"proof_{task_id}_{from_phone[-4:]}.{ext}"
+
+    try:
+        image_url = _upload_proof_to_notion(page_id, image_bytes, file_name, task_id)
+    except Exception:
+        log.exception("Failed to upload proof to Notion")
+        return t(locale, "proof_upload_failed", task_id=task_id)
+
+    today = datetime.now(pytz.timezone(config.TIMEZONE)).date().isoformat()
+    notion_client.update_tracker_status(page_id, "Done", comment_iso=today)
+    state.clear_pending_proof(from_phone)
+
+    return t(locale, "proof_accepted", task_id=task_id)
 
 
 # ─────────────────────────────  helpers  ──────────────────────────────
@@ -202,7 +240,42 @@ def _create_task(locale: str, rest: str) -> str:
     )
 
 
+def _start_done(locale: str, trooper_name: str, from_phone: str, task_id: str) -> str:
+    """Step 1 of /done: validate task, save pending state, ask for screenshot."""
+    if not task_id:
+        return t(locale, "missing_task_id")
+    rows = notion_client.find_tracker_rows(task_id, trooper_name)
+    if not rows:
+        return t(locale, "task_not_found_for_user", task_id=task_id)
+    state.set_pending_proof(from_phone, task_id, rows[0]["page_id"], trooper_name)
+    return t(locale, "send_proof", task_id=task_id)
+
+
+def _finish_done_without_proof(locale: str, from_phone: str, pending: dict) -> None:
+    """Mark task Done without proof (user chose /skip)."""
+    today = datetime.now(pytz.timezone(config.TIMEZONE)).date().isoformat()
+    notion_client.update_tracker_status(pending["page_id"], "Done", comment_iso=today)
+    state.clear_pending_proof(from_phone)
+
+
+def _upload_proof_to_notion(page_id: str, image_bytes: bytes, file_name: str, task_id: str) -> str:
+    """Upload proof image as a block inside the Notion page (child image block)
+    and also set the Prove files property via external URL placeholder."""
+    import base64
+
+    notion_client.add_image_block(page_id, image_bytes, file_name)
+
+    placeholder_url = f"https://trooper-bot.onrender.com/proof/{task_id}/{file_name}"
+    try:
+        notion_client.attach_prove_image(page_id, placeholder_url, file_name)
+    except Exception:
+        log.warning("Could not set Prove files property (column may not exist yet)")
+
+    return placeholder_url
+
+
 def _mark(locale: str, trooper_name: str, task_id: str, status: str) -> str:
+    """Used for /redo only."""
     if not task_id:
         return t(locale, "missing_task_id")
     rows = notion_client.find_tracker_rows(task_id, trooper_name)
@@ -210,6 +283,4 @@ def _mark(locale: str, trooper_name: str, task_id: str, status: str) -> str:
         return t(locale, "task_not_found_for_user", task_id=task_id)
     today = datetime.now(pytz.timezone(config.TIMEZONE)).date().isoformat()
     notion_client.update_tracker_status(rows[0]["page_id"], status, comment_iso=today)
-    if status == "Done":
-        return t(locale, "marked_done", task_id=task_id)
     return t(locale, "marked_redo", task_id=task_id)

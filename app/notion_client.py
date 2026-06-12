@@ -221,6 +221,80 @@ def update_tracker_status(page_id: str, status_name: str, comment_iso: Optional[
     return _patch(f"/pages/{page_id}", {"properties": props})
 
 
+def attach_prove_image(page_id: str, image_url: str, file_name: str = "proof.jpg") -> Dict[str, Any]:
+    """Set the 'Prove' files property on a Task Tracker page to an external image URL."""
+    props: Dict[str, Any] = {
+        "Prove": {
+            "files": [
+                {
+                    "type": "external",
+                    "name": file_name,
+                    "external": {"url": image_url},
+                }
+            ]
+        }
+    }
+    return _patch(f"/pages/{page_id}", {"properties": props})
+
+
+def add_image_block(page_id: str, image_bytes: bytes, file_name: str) -> Dict[str, Any]:
+    """Append an image block to a Notion page. Uploads image bytes to a temporary
+    hosting service first, since Notion only accepts external URLs for image blocks."""
+    import base64
+    url = _upload_image_for_notion(image_bytes, file_name)
+    if not url:
+        raise ValueError("Failed to upload image to hosting service")
+    body = {
+        "children": [
+            {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": url},
+                },
+            }
+        ]
+    }
+    return _patch(f"/blocks/{page_id}/children", body)
+
+
+def _upload_image_for_notion(image_bytes: bytes, file_name: str) -> Optional[str]:
+    """Upload image to imgbb (free image hosting) and return the public URL.
+    Falls back to a base64 data URI if upload fails."""
+    import os
+    import base64
+
+    api_key = os.environ.get("IMGBB_API_KEY", "")
+    if api_key:
+        try:
+            b64 = base64.b64encode(image_bytes).decode()
+            r = requests.post(
+                "https://api.imgbb.com/1/upload",
+                data={"key": api_key, "image": b64, "name": file_name},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                return r.json()["data"]["url"]
+            log.warning("imgbb upload failed: %s %s", r.status_code, r.text)
+        except Exception:
+            log.exception("imgbb upload error")
+
+    try:
+        b64 = base64.b64encode(image_bytes).decode()
+        r = requests.post(
+            "https://0x0.st",
+            files={"file": (file_name, image_bytes)},
+            timeout=30,
+        )
+        if r.status_code == 200:
+            return r.text.strip()
+    except Exception:
+        log.exception("0x0.st upload error")
+
+    return None
+
+
 def _extract_tracker_row(page: Dict[str, Any]) -> Dict[str, Any]:
     p = page.get("properties", {})
     return {

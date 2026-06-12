@@ -59,11 +59,37 @@ def webhook_receive():
                     log.info("DELIVERY %s to %s", status, recipient)
 
     msg = whatsapp_client.parse_inbound(payload)
-    if not msg or msg.get("type") != "text":
+    if not msg:
         return jsonify(status="ignored"), 200
 
     from_phone = msg["from"]
-    text = msg["text"]
+    msg_type = msg.get("type", "")
+    text = msg.get("text", "")
+
+    # Handle image messages (screenshot proof for /done)
+    if msg_type == "image":
+        log.info("← %s: [image] media_id=%s", from_phone, msg.get("media_id"))
+        try:
+            reply = command_handler.handle_image(
+                from_phone,
+                msg.get("media_id", ""),
+                msg.get("mime_type", "image/jpeg"),
+            )
+        except Exception:
+            log.exception("Image handler crashed")
+            reply = "Sorry, something went wrong processing your image."
+        if reply:
+            trooper = config.trooper_by_phone(from_phone)
+            trooper_name = trooper.display_name if trooper else from_phone
+            try:
+                whatsapp_client.send_text(from_phone, reply, trooper_name=trooper_name)
+            except Exception:
+                log.exception("Failed to send WA reply")
+        return jsonify(status="ok"), 200
+
+    if msg_type != "text":
+        return jsonify(status="ignored"), 200
+
     log.info("← %s: %s", from_phone, text)
 
     try:
@@ -73,7 +99,6 @@ def webhook_receive():
         reply = "Sorry, something went wrong. Jonathan has been notified."
 
     if reply is None:
-        # Not a slash-command (or empty) - stay silent. Critical for groups.
         return jsonify(status="ignored"), 200
 
     trooper = config.trooper_by_phone(from_phone)

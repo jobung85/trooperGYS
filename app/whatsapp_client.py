@@ -92,9 +92,31 @@ def send_new_task_notification(
     )
 
 
+def download_media(media_id: str) -> Optional[bytes]:
+    """Download a media file from WhatsApp by its media ID.
+    Returns raw bytes or None on failure."""
+    headers = {"Authorization": f"Bearer {config.WHATSAPP_ACCESS_TOKEN}"}
+    try:
+        meta_r = requests.get(f"{GRAPH}/{media_id}", headers=headers, timeout=15)
+        if meta_r.status_code >= 300:
+            log.error("Media meta fetch failed: %s %s", meta_r.status_code, meta_r.text)
+            return None
+        url = meta_r.json().get("url")
+        if not url:
+            return None
+        dl_r = requests.get(url, headers=headers, timeout=30)
+        if dl_r.status_code >= 300:
+            log.error("Media download failed: %s", dl_r.status_code)
+            return None
+        return dl_r.content
+    except Exception:
+        log.exception("Failed to download media %s", media_id)
+        return None
+
+
 def parse_inbound(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Extract the first user-text message from a Meta webhook envelope.
-    Returns dict or None for non-message events (statuses, system, etc.)."""
+    """Extract the first user message from a Meta webhook envelope.
+    Handles text and image types. Returns dict or None for non-message events."""
     try:
         entry = (payload.get("entry") or [{}])[0]
         change = (entry.get("changes") or [{}])[0]
@@ -103,21 +125,24 @@ def parse_inbound(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not messages:
             return None
         msg = messages[0]
-        if msg.get("type") != "text":
-            return {
-                "from": msg.get("from", ""),
-                "text": "",
-                "type": msg.get("type", ""),
-                "msg_id": msg.get("id", ""),
-            }
         contact = (value.get("contacts") or [{}])[0]
-        return {
+        msg_type = msg.get("type", "")
+        base = {
             "from": msg.get("from", ""),
-            "text": (msg.get("text") or {}).get("body", "").strip(),
-            "type": "text",
             "msg_id": msg.get("id", ""),
+            "type": msg_type,
             "name": ((contact.get("profile") or {}).get("name", "")),
         }
+        if msg_type == "text":
+            base["text"] = (msg.get("text") or {}).get("body", "").strip()
+        elif msg_type == "image":
+            img = msg.get("image") or {}
+            base["text"] = (img.get("caption") or "").strip()
+            base["media_id"] = img.get("id", "")
+            base["mime_type"] = img.get("mime_type", "image/jpeg")
+        else:
+            base["text"] = ""
+        return base
     except Exception:
         log.exception("Failed to parse inbound webhook payload")
         return None
