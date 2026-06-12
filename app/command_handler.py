@@ -41,13 +41,26 @@ def handle(from_phone: str, text: str) -> Optional[str]:
     if not body:
         return None
 
+    first_word = body.split(None, 1)[0].lower()
+    args = body.split(None, 1)[1].strip() if len(body.split(None, 1)) > 1 else ""
+
+    # ── Admin-only commands (before trooper check) ───────────────────
+    if first_word in {"accept", "approve", "terima"}:
+        return _admin_accept(from_phone, args)
+    if first_word in {"deny", "reject", "tolak"}:
+        return _admin_deny(from_phone, args)
+    if first_word == "pending":
+        return _admin_pending_list(from_phone)
+
+    # ── /register — available to unregistered users ──────────────────
+    if first_word in {"register", "daftar", "yes"}:
+        return _register(from_phone, args)
+
     trooper = config.trooper_by_phone(from_phone)
     if trooper is None:
         return t(None, "not_registered")
 
     locale = state.get_language(from_phone) or "en"
-    first_word = body.split(None, 1)[0].lower()
-    args = body.split(None, 1)[1].strip() if len(body.split(None, 1)) > 1 else ""
 
     # ── /skip — cancel pending proof ─────────────────────────────────
     if first_word in {"skip", "lewat", "cancel", "batal"}:
@@ -289,3 +302,122 @@ def _mark(locale: str, trooper_name: str, task_id: str, status: str) -> str:
     today = datetime.now(pytz.timezone(config.TIMEZONE)).date().isoformat()
     notion_client.update_tracker_status(rows[0]["page_id"], status, comment_iso=today)
     return t(locale, "marked_redo", task_id=task_id)
+
+
+# ─────────────────────────  registration flow  ─────────────────────────
+
+def _register(from_phone: str, name_arg: str) -> str:
+    """Handle /register <Name> from an unregistered user."""
+    if config.trooper_by_phone(from_phone):
+        locale = state.get_language(from_phone) or "en"
+        return t(locale, "help_menu")
+
+    if state.get_pending_registration(from_phone):
+        return t(None, "register_already_pending")
+
+    name = name_arg.strip()
+    if not name:
+        return t(None, "register_usage")
+
+    phone_norm = from_phone.lstrip("+").replace(" ", "")
+    state.set_pending_registration(phone_norm, name)
+
+    from . import whatsapp_client
+    admin_msg = t("en", "admin_new_registration", name=name, phone=phone_norm)
+    try:
+        whatsapp_client.send_text(config.ADMIN_PHONE, admin_msg, trooper_name="Admin")
+    except Exception:
+        log.exception("Failed to notify admin about new registration")
+
+    return t(None, "register_submitted", name=name, phone=phone_norm)
+
+
+def _admin_accept(from_phone: str, phone_arg: str) -> str:
+    """Admin approves a pending registration."""
+    locale = state.get_language(from_phone) or "en"
+    if not config.is_admin(from_phone):
+        return t(locale, "not_admin")
+
+    phone = phone_arg.strip().lstrip("+").replace(" ", "")
+    if not phone:
+        return t(locale, "admin_no_pending", phone="(none)")
+
+    reg = state.get_pending_registration(phone)
+    if not reg:
+        return t(locale, "admin_no_pending", phone=phone)
+
+    name = reg["name"]
+
+    config.add_trooper(name, phone)
+    state.add_dynamic_trooper(phone, name)
+    state.clear_pending_registration(phone)
+
+    task_count = _assign_existing_tasks(name)
+
+    from . import whatsapp_client
+    try:
+        user_msg = t("en", "user_accepted", name=name, task_count=task_count)
+        whatsapp_client.send_text(phone, user_msg, trooper_name=name)
+    except Exception:
+        log.exception("Failed to notify new trooper %s", phone)
+
+    return t(locale, "admin_accepted", name=name, phone=phone, task_count=task_count)
+
+
+def _admin_deny(from_phone: str, phone_arg: str) -> str:
+    """Admin denies a pending registration."""
+    locale = state.get_language(from_phone) or "en"
+    if not config.is_admin(from_phone):
+        return t(locale, "not_admin")
+
+    phone = phone_arg.strip().lstrip("+").replace(" ", "")
+    if not phone:
+        return t(locale, "admin_no_pending", phone="(none)")
+
+    reg = state.get_pending_registration(phone)
+    if not reg:
+        return t(locale, "admin_no_pending", phone=phone)
+
+    name = reg["name"]
+    state.clear_pending_registration(phone)
+
+    from . import whatsapp_client
+    try:
+        user_msg = t("en", "user_denied")
+        whatsapp_client.send_text(phone, user_msg, trooper_name=name)
+    except Exception:
+        log.exception("Failed to notify denied user %s", phone)
+
+    return t(locale, "admin_denied", name=name, phone=phone)
+
+
+def _admin_pending_list(from_phone: str) -> str:
+    """Show all pending registrations (admin only)."""
+    locale = state.get_language(from_phone) or "en"
+    if not config.is_admin(from_phone):
+        return t(locale, "not_admin")
+
+    regs = state.get_all_pending_registrations()
+    if not regs:
+        return t(locale, "admin_pending_none")
+
+    lines = []
+    for phone, reg in regs.items():
+        lines.append(f"- *{reg['name']}* ({phone})")
+    return t(locale, "admin_pending_list", list="\n".join(lines))
+
+
+def _assign_existing_tasks(trooper_name: str) -> int:
+    """Create Task Tracker rows for all existing Main Tasks for a new trooper."""
+    count = 0
+    try:
+        all_tasks = notion_client.query_main_tasks_after(None)
+        for task in all_tasks:
+            task_id = task["task_id"]
+            existing = notion_client.find_tracker_rows(task_id, trooper_name)
+            if not existing:
+                notion_client.create_tracker_row(task_id, trooper_name)
+                count += 1
+    except Exception:
+        log.exception("Failed to assign existing tasks to new trooper %s", trooper_name)
+    return count

@@ -62,6 +62,29 @@ def _load_roster() -> List[Trooper]:
 
 TROOPERS: List[Trooper] = _load_roster()
 
+ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "6281216977718")
+
+
+def _load_dynamic_troopers() -> None:
+    """Merge any previously approved dynamic troopers from state file."""
+    try:
+        state_path = Path(STATE_FILE)
+        if state_path.exists():
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            for phone, info in data.get("dynamic_troopers", {}).items():
+                if not trooper_by_phone(phone):
+                    TROOPERS.append(Trooper(
+                        notion_name=info["name"],
+                        display_name=info["name"],
+                        phone=phone,
+                        aliases=[info["name"]],
+                    ))
+    except Exception:
+        pass
+
+
+_load_dynamic_troopers()
+
 
 def trooper_by_phone(phone: str) -> Optional[Trooper]:
     """Find a Trooper by inbound WhatsApp phone (Meta strips the '+')."""
@@ -77,3 +100,19 @@ def trooper_by_notion_name(name: str) -> Optional[Trooper]:
         if t.notion_name == name:
             return t
     return None
+
+
+def add_trooper(name: str, phone: str) -> Trooper:
+    """Add a new trooper at runtime (from approved registration)."""
+    t = Trooper(
+        notion_name=name,
+        display_name=name,
+        phone=phone.lstrip("+").replace(" ", ""),
+        aliases=[name],
+    )
+    TROOPERS.append(t)
+    return t
+
+
+def is_admin(phone: str) -> bool:
+    return phone.lstrip("+").replace(" ", "") == ADMIN_PHONE

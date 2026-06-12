@@ -99,3 +99,46 @@ def clear_pending_proof(phone: str) -> None:
     pending = data.get("pending_proof", {})
     pending.pop(phone.lstrip("+"), None)
     _write(data)
+
+
+# ─── registration flow ────────────────────────────────────────────────
+
+def set_pending_registration(phone: str, name: str, wa_name: str = "") -> None:
+    """Store a pending registration request awaiting admin approval."""
+    data = _read()
+    regs = data.setdefault("pending_registrations", {})
+    regs[phone.lstrip("+")] = {
+        "name": name,
+        "wa_name": wa_name,
+        "phone": phone.lstrip("+"),
+    }
+    _write(data)
+
+
+def get_pending_registration(phone: str) -> dict | None:
+    return _read().get("pending_registrations", {}).get(phone.lstrip("+"))
+
+
+def get_all_pending_registrations() -> dict:
+    return _read().get("pending_registrations", {})
+
+
+def clear_pending_registration(phone: str) -> None:
+    data = _read()
+    regs = data.get("pending_registrations", {})
+    regs.pop(phone.lstrip("+"), None)
+    _write(data)
+
+
+# ─── dynamic troopers (approved registrations) ────────────────────────
+
+def add_dynamic_trooper(phone: str, name: str) -> None:
+    """Store an approved dynamic trooper (persists in state file)."""
+    data = _read()
+    dyn = data.setdefault("dynamic_troopers", {})
+    dyn[phone.lstrip("+")] = {"name": name, "phone": phone.lstrip("+")}
+    _write(data)
+
+
+def get_dynamic_troopers() -> dict:
+    return _read().get("dynamic_troopers", {})

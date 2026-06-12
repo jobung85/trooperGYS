@@ -16,8 +16,10 @@ SUPPORTED = {"en", "id"}
 STRINGS: Dict[str, Dict[str, str]] = {
     "en": {
         "not_registered": (
-            "Hi! This WhatsApp number isn't registered as a Trooper.\n"
-            "Please ask Jonathan to add it."
+            "Hi! This WhatsApp number isn't registered as a Trooper.\n\n"
+            "Want to join? Send:\n"
+            "`/register <Your Name>`\n\n"
+            "Example: `/register Maria`"
         ),
         "help_menu": (
             "*Trooper Bot - Commands*\n"
@@ -33,6 +35,10 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "- `/create <Task ID> | <Content> | <Link>` - create a new Main Task\n"
             "  (creates trackers for everyone automatically)\n"
             "- `/lang en` or `/lang id` - change language\n\n"
+            "Admin only:\n"
+            "- `/accept <phone>` - approve registration\n"
+            "- `/deny <phone>` - reject registration\n"
+            "- `/pending` - list pending registrations\n\n"
             "Tip: use `/lang id` to switch to Bahasa Indonesia."
         ),
         "lang_set": "Language set to *English*. Send `/help` to see commands.",
@@ -72,6 +78,34 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "proof_upload_failed": "Failed to upload proof to Notion for *{task_id}*. Please try again.",
         "done_skipped": "*{task_id}* marked as *Done* (without proof).",
         "nothing_to_skip": "No pending task to skip. Use `/done <Task ID>` first.",
+        "register_submitted": (
+            "Your registration request has been submitted.\n"
+            "Name: *{name}*\n"
+            "Phone: {phone}\n\n"
+            "Jonathan will review your application. Please wait."
+        ),
+        "register_already_pending": "You already have a pending registration. Please wait for Jonathan to review it.",
+        "register_usage": "Usage: `/register <Your Name>`\nExample: `/register Maria`",
+        "admin_new_registration": (
+            "*New Trooper Registration*\n"
+            "Name: *{name}*\n"
+            "Phone: {phone}\n\n"
+            "Reply:\n"
+            "`/accept {phone}` - approve\n"
+            "`/deny {phone}` - reject"
+        ),
+        "admin_accepted": "Approved. *{name}* ({phone}) is now a Trooper with {task_count} tasks assigned.",
+        "admin_denied": "Denied. *{name}* ({phone}) has been rejected.",
+        "admin_no_pending": "No pending registration for phone `{phone}`.",
+        "admin_pending_list": "*Pending registrations:*\n{list}",
+        "admin_pending_none": "No pending registrations.",
+        "user_accepted": (
+            "Welcome aboard, *{name}*!\n"
+            "You are now a Trooper. {task_count} tasks have been assigned to you.\n\n"
+            "Send `/help` to see available commands."
+        ),
+        "user_denied": "Sorry, your registration was not approved. Please contact Jonathan for more details.",
+        "not_admin": "Only the admin can use this command.",
         "create_usage": (
             "Usage: `/create <Task ID> | <Content Name> | <Link>`\n"
             "Example: `/create 0042 | Why is faith important? | https://...`\n"
@@ -89,8 +123,10 @@ STRINGS: Dict[str, Dict[str, str]] = {
     },
     "id": {
         "not_registered": (
-            "Hai! Nomor WhatsApp ini belum terdaftar sebagai Trooper.\n"
-            "Mohon hubungi Jonathan untuk mendaftarkan."
+            "Hai! Nomor WhatsApp ini belum terdaftar sebagai Trooper.\n\n"
+            "Ingin bergabung? Kirim:\n"
+            "`/register <Nama Kamu>`\n\n"
+            "Contoh: `/register Maria`"
         ),
         "help_menu": (
             "*Trooper Bot - Daftar Perintah*\n"
@@ -106,6 +142,10 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "- `/create <Task ID> | <Konten> | <Link>` - buat Main Task baru\n"
             "  (otomatis bikin tracker untuk semua orang)\n"
             "- `/lang en` atau `/lang id` - ganti bahasa\n\n"
+            "Admin saja:\n"
+            "- `/accept <nomor>` - setujui pendaftaran\n"
+            "- `/deny <nomor>` - tolak pendaftaran\n"
+            "- `/pending` - daftar pendaftaran menunggu\n\n"
             "Tip: pakai `/lang en` untuk bahasa Inggris."
         ),
         "lang_set": "Bahasa diatur ke *Bahasa Indonesia*. Kirim `/help` untuk lihat perintah.",
@@ -145,6 +185,34 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "proof_upload_failed": "Gagal mengunggah bukti ke Notion untuk *{task_id}*. Coba lagi.",
         "done_skipped": "*{task_id}* ditandai *Selesai* (tanpa bukti).",
         "nothing_to_skip": "Tidak ada task yang menunggu. Gunakan `/done <Task ID>` dulu.",
+        "register_submitted": (
+            "Permintaan pendaftaran kamu sudah dikirim.\n"
+            "Nama: *{name}*\n"
+            "Telepon: {phone}\n\n"
+            "Jonathan akan meninjau aplikasi kamu. Mohon tunggu."
+        ),
+        "register_already_pending": "Kamu sudah punya pendaftaran yang menunggu. Mohon tunggu Jonathan meninjau.",
+        "register_usage": "Cara pakai: `/register <Nama Kamu>`\nContoh: `/register Maria`",
+        "admin_new_registration": (
+            "*Pendaftaran Trooper Baru*\n"
+            "Nama: *{name}*\n"
+            "Telepon: {phone}\n\n"
+            "Balas:\n"
+            "`/accept {phone}` - setujui\n"
+            "`/deny {phone}` - tolak"
+        ),
+        "admin_accepted": "Disetujui. *{name}* ({phone}) sekarang menjadi Trooper dengan {task_count} tugas.",
+        "admin_denied": "Ditolak. *{name}* ({phone}) telah ditolak.",
+        "admin_no_pending": "Tidak ada pendaftaran menunggu untuk nomor `{phone}`.",
+        "admin_pending_list": "*Pendaftaran menunggu:*\n{list}",
+        "admin_pending_none": "Tidak ada pendaftaran yang menunggu.",
+        "user_accepted": (
+            "Selamat bergabung, *{name}*!\n"
+            "Kamu sekarang Trooper. {task_count} tugas telah ditugaskan.\n\n"
+            "Kirim `/help` untuk melihat perintah."
+        ),
+        "user_denied": "Maaf, pendaftaran kamu belum disetujui. Hubungi Jonathan untuk info lebih lanjut.",
+        "not_admin": "Hanya admin yang bisa menggunakan perintah ini.",
         "create_usage": (
             "Cara pakai: `/create <Task ID> | <Nama Konten> | <Link>`\n"
             "Contoh: `/create 0042 | Kenapa iman penting? | https://...`\n"
