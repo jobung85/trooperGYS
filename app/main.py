@@ -1,9 +1,11 @@
 """Flask web server: WhatsApp webhook + tiny health/poller endpoints."""
 from __future__ import annotations
 
+import collections
 import logging
 import os
 import threading
+import time
 from typing import Tuple
 
 from flask import Flask, jsonify, request
@@ -13,6 +15,23 @@ from . import command_handler, config, poller, whatsapp_client
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+_seen_msgs: collections.OrderedDict[str, float] = collections.OrderedDict()
+_seen_lock = threading.Lock()
+_DEDUP_TTL = 120  # seconds
+
+
+def _is_duplicate(msg_id: str) -> bool:
+    """Return True if this message was already processed (Meta webhook retry)."""
+    now = time.time()
+    with _seen_lock:
+        # Evict old entries
+        while _seen_msgs and next(iter(_seen_msgs.values())) < now - _DEDUP_TTL:
+            _seen_msgs.popitem(last=False)
+        if msg_id in _seen_msgs:
+            return True
+        _seen_msgs[msg_id] = now
+        return False
 
 
 @app.get("/")
@@ -62,11 +81,29 @@ def webhook_receive():
     if not msg:
         return jsonify(status="ignored"), 200
 
+    msg_id = msg.get("msg_id", "")
+    if msg_id and _is_duplicate(msg_id):
+        log.debug("Duplicate msg_id=%s, skipping", msg_id)
+        return jsonify(status="duplicate"), 200
+
     from_phone = msg["from"]
     msg_type = msg.get("type", "")
+
+    # Return 200 immediately, process in background to avoid Meta retries
+    def _process():
+        try:
+            _handle_message(from_phone, msg_type, msg)
+        except Exception:
+            log.exception("Background message handler crashed")
+
+    threading.Thread(target=_process, daemon=True).start()
+    return jsonify(status="ok"), 200
+
+
+def _handle_message(from_phone: str, msg_type: str, msg: dict) -> None:
+    """Process a single inbound message (runs in background thread)."""
     text = msg.get("text", "")
 
-    # Handle image messages (screenshot proof for /done)
     if msg_type == "image":
         log.info("← %s: [image] media_id=%s", from_phone, msg.get("media_id"))
         try:
@@ -79,16 +116,11 @@ def webhook_receive():
             log.exception("Image handler crashed")
             reply = "Sorry, something went wrong processing your image."
         if reply:
-            trooper = config.trooper_by_phone(from_phone)
-            trooper_name = trooper.display_name if trooper else from_phone
-            try:
-                whatsapp_client.send_text(from_phone, reply, trooper_name=trooper_name)
-            except Exception:
-                log.exception("Failed to send WA reply")
-        return jsonify(status="ok"), 200
+            _send_reply(from_phone, reply)
+        return
 
     if msg_type != "text":
-        return jsonify(status="ignored"), 200
+        return
 
     log.info("← %s: %s", from_phone, text)
 
@@ -99,16 +131,18 @@ def webhook_receive():
         reply = "Sorry, something went wrong. Jonathan has been notified."
 
     if reply is None:
-        return jsonify(status="ignored"), 200
+        return
 
+    _send_reply(from_phone, reply)
+
+
+def _send_reply(from_phone: str, reply: str) -> None:
     trooper = config.trooper_by_phone(from_phone)
     trooper_name = trooper.display_name if trooper else from_phone
     try:
         whatsapp_client.send_text(from_phone, reply, trooper_name=trooper_name)
     except Exception:
-        log.exception("Failed to send WA reply")
-
-    return jsonify(status="ok"), 200
+        log.exception("Failed to send WA reply to %s", from_phone)
 
 
 # ─── Manual poll trigger ──────────────────────────────────────────────
