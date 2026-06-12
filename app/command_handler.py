@@ -259,19 +259,24 @@ def _finish_done_without_proof(locale: str, from_phone: str, pending: dict) -> N
 
 
 def _upload_proof_to_notion(page_id: str, image_bytes: bytes, file_name: str, task_id: str) -> str:
-    """Upload proof image as a block inside the Notion page (child image block)
-    and also set the Prove files property via external URL placeholder."""
-    import base64
+    """Upload proof image to imgbb, attach as image block + Prove property in Notion."""
+    image_url = notion_client.upload_image_to_hosting(image_bytes, file_name)
+    if not image_url:
+        raise ValueError("Failed to upload image to hosting service")
 
-    notion_client.add_image_block(page_id, image_bytes, file_name)
+    log.info("Image uploaded to: %s", image_url)
 
-    placeholder_url = f"https://trooper-bot.onrender.com/proof/{task_id}/{file_name}"
     try:
-        notion_client.attach_prove_image(page_id, placeholder_url, file_name)
+        notion_client.add_image_block(page_id, image_url)
+    except Exception:
+        log.exception("Failed to add image block to Notion page")
+
+    try:
+        notion_client.attach_prove_image(page_id, image_url, file_name)
     except Exception:
         log.warning("Could not set Prove files property (column may not exist yet)")
 
-    return placeholder_url
+    return image_url
 
 
 def _mark(locale: str, trooper_name: str, task_id: str, status: str) -> str:

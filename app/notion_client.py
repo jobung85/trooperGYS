@@ -237,13 +237,8 @@ def attach_prove_image(page_id: str, image_url: str, file_name: str = "proof.jpg
     return _patch(f"/pages/{page_id}", {"properties": props})
 
 
-def add_image_block(page_id: str, image_bytes: bytes, file_name: str) -> Dict[str, Any]:
-    """Append an image block to a Notion page. Uploads image bytes to a temporary
-    hosting service first, since Notion only accepts external URLs for image blocks."""
-    import base64
-    url = _upload_image_for_notion(image_bytes, file_name)
-    if not url:
-        raise ValueError("Failed to upload image to hosting service")
+def add_image_block(page_id: str, image_url: str) -> Dict[str, Any]:
+    """Append an external image block to a Notion page."""
     body = {
         "children": [
             {
@@ -251,7 +246,7 @@ def add_image_block(page_id: str, image_bytes: bytes, file_name: str) -> Dict[st
                 "type": "image",
                 "image": {
                     "type": "external",
-                    "external": {"url": url},
+                    "external": {"url": image_url},
                 },
             }
         ]
@@ -259,38 +254,28 @@ def add_image_block(page_id: str, image_bytes: bytes, file_name: str) -> Dict[st
     return _patch(f"/blocks/{page_id}/children", body)
 
 
-def _upload_image_for_notion(image_bytes: bytes, file_name: str) -> Optional[str]:
-    """Upload image to imgbb (free image hosting) and return the public URL.
-    Falls back to a base64 data URI if upload fails."""
+def upload_image_to_hosting(image_bytes: bytes, file_name: str) -> Optional[str]:
+    """Upload image to imgbb (free image hosting) and return the public URL."""
     import os
     import base64
 
     api_key = os.environ.get("IMGBB_API_KEY", "")
-    if api_key:
-        try:
-            b64 = base64.b64encode(image_bytes).decode()
-            r = requests.post(
-                "https://api.imgbb.com/1/upload",
-                data={"key": api_key, "image": b64, "name": file_name},
-                timeout=30,
-            )
-            if r.status_code == 200:
-                return r.json()["data"]["url"]
-            log.warning("imgbb upload failed: %s %s", r.status_code, r.text)
-        except Exception:
-            log.exception("imgbb upload error")
+    if not api_key:
+        log.error("IMGBB_API_KEY not set — cannot upload proof images")
+        return None
 
     try:
         b64 = base64.b64encode(image_bytes).decode()
         r = requests.post(
-            "https://0x0.st",
-            files={"file": (file_name, image_bytes)},
+            "https://api.imgbb.com/1/upload",
+            data={"key": api_key, "image": b64, "name": file_name},
             timeout=30,
         )
         if r.status_code == 200:
-            return r.text.strip()
+            return r.json()["data"]["url"]
+        log.error("imgbb upload failed: %s %s", r.status_code, r.text[:200])
     except Exception:
-        log.exception("0x0.st upload error")
+        log.exception("imgbb upload error")
 
     return None
 
